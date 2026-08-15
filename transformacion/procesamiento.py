@@ -1,10 +1,8 @@
 """
-Feature engineering orientado al dashboard.
-
 Transforma el DataFrame crudo (salida de la ingesta) en un DataFrame
 enriquecido con las columnas que necesitan los gráficos: año, mes,
 estación del año, década, país y departamento (región) del evento, y
-categoría de profundidad. Este módulo no conoce Streamlit: solo pandas.
+categoría de profundidad. Este módulo naún no conoce Streamlit: solo pandas.
 """
 
 import math
@@ -16,9 +14,7 @@ from ingesta.configuracion import ZONA_HORARIA_PERU
 
 log = logging.getLogger("transformacion")
 
-# -- Centroides aproximados de los departamentos de Perú (para asignar región
-#    por cercanía al epicentro; enfoque simple sin depender de un servicio
-#    externo de geocodificación) --------------------------------------------
+# -- Zonas aproximadas de los departamentos de Perú 
 DEPARTAMENTOS_PERU = {
     "Amazonas": (-6.23, -77.87),
     "Áncash": (-9.53, -77.53),
@@ -74,9 +70,7 @@ def _distancia_haversine_km(lat1, lon1, lat2, lon2) -> float:
 def departamento_y_distancia_km(lat: float, lon: float):
     """
     Devuelve `(departamento, distancia_km)` del centroide de departamento más
-    cercano al epicentro (lat, lon). La distancia se usa, por ejemplo, para
-    construir una referencia de texto tipo "~40 km de Ayacucho" cuando la
-    fuente de datos no trae ya una descripción de lugar (caso del IGP).
+    cercano al epicentro (lat, lon).
     """
     if pd.isna(lat) or pd.isna(lon):
         return "Sin dato", None
@@ -89,12 +83,11 @@ def departamento_y_distancia_km(lat: float, lon: float):
 
 
 def departamento_mas_cercano(lat: float, lon: float) -> str:
-    """Asigna el departamento de Perú cuyo centroide está más cerca del epicentro (lat, lon)."""
+    """Asigna el departamento de Perú cuya zona está más cerca del epicentro (lat, lon)."""
     return departamento_y_distancia_km(lat, lon)[0]
 
 
 def extraer_pais(lugar: str) -> str:
-    """Extrae el país desde el texto de la USGS, p. ej. '24 km SSE of Nazca, Peru' -> 'Peru'."""
     if not isinstance(lugar, str) or "," not in lugar:
         return "Desconocido"
     return lugar.split(",")[-1].strip()
@@ -112,10 +105,7 @@ def categorizar_profundidad(profundidad_km: float) -> str:
 
 def agregar_hora_local_peru(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Agrega `fecha_hora_lima`: la misma marca de tiempo convertida a la zona
-    horaria de Perú (UTC-5, sin horario de verano). El dato se sigue
-    almacenando y calculando en UTC (`fecha_hora_utc`); esta columna es solo
-    para MOSTRAR fechas/horas de forma intuitiva en el dashboard.
+    Agrega `fecha_hora_lima`: la misma marca de tiempo convertida a la zona horaria de Perú (UTC-5). 
     """
     df = df.copy()
     df["fecha_hora_lima"] = df["fecha_hora_utc"].dt.tz_convert(ZONA_HORARIA_PERU)

@@ -1,13 +1,9 @@
 """
-Cliente de ingesta para la API de la USGS (United States Geological Survey).
+Cliente de ingesta para la API de la USGS.
 
 Responsabilidad única: descargar, normalizar y cachear en Parquet los sismos
-históricos de Perú. Incluye manejo de errores de red con reintentos y
-backoff exponencial, y particionado automático si el conteo de eventos
-supera el límite permitido por petición.
+históricos de Perú. Incluye manejo de errores de red con reintentos.
 
-Basado en el script de la carpeta `Ingesta_datos_T1/ingesta_sismos.py`
-provisto como punto de partida del proyecto.
 """
 
 import datetime
@@ -44,9 +40,7 @@ RUTA_LOG = os.path.join(DIR_LOGS, "ingesta.log")
 class FormateadorHoraLima(logging.Formatter):
     """
     Formatter que muestra las marcas de tiempo del log SIEMPRE en hora de Lima
-    (Perú, UTC-5), sin importar la zona horaria del servidor donde corra la
-    app. Es necesario porque Streamlit Cloud corre sus contenedores en UTC:
-    sin esto, los logs se ven "adelantados" varias horas respecto a Perú.
+    (Perú, UTC-5).
     """
 
     def converter(self, timestamp):
@@ -226,8 +220,8 @@ def ejecutar_ingesta_completa(forzar: bool = False) -> str:
     """
     Punto de entrada de la capa de ingesta para la carga histórica completa.
 
-    Si ya existe un Parquet cacheado y `forzar=False`, no vuelve a golpear la
-    API (cortesía con el servicio y ejecución rápida para el dashboard).
+    Si ya existe un Parquet cacheado y `forzar=False`, no vuelve a consultar la
+    API.
     """
     if os.path.exists(RUTA_PARQUET) and not forzar:
         log.info(f"Se encontró caché Parquet existente en {RUTA_PARQUET}. Se omite la descarga.")

@@ -1,8 +1,7 @@
 """
 app.py — Punto de entrada de la Data App de Streamlit.
 
-Dashboard interactivo de análisis histórico y monitoreo de sismos en Perú
-(fuente: API de la USGS). Integra las tres capas del proyecto:
+Capas del proyecto:
 
     ingesta/         -> descarga y cachea los datos en Parquet
     transformacion/  -> valida (Pandera) y enriquece (feature engineering)
@@ -24,7 +23,7 @@ from visualizacion import componentes, estilos, graficos, mapa
 
 log = logging.getLogger("dashboard")
 
-SEGUNDOS_REFRESCO_DASHBOARD = 300  # 5 minutos
+SEGUNDOS_REFRESCO_DASHBOARD = 300  # equivale a 5 minutos
 
 
 # ── Configuración de página ────────────────────────────────────────────────
@@ -42,8 +41,7 @@ def configurar_pagina() -> None:
 def cargar_datos_crudos() -> pd.DataFrame:
     """
     Carga desde Parquet. Si no existe, corre la ingesta histórica completa; si
-    existe pero está desactualizado (> 24h desde el último evento cacheado),
-    dispara una actualización incremental automática antes de leerlo.
+    existe pero está desactualizado, se dispara una actualización incremental automática antes de leerlo.
     """
     asegurar_datos_actualizados(horas_maximas_antiguedad=24)
     df = pd.read_parquet(RUTA_PARQUET)
@@ -111,14 +109,11 @@ def seccion_preguntas_de_negocio(df: pd.DataFrame) -> None:
 def main() -> None:
     configurar_pagina()
 
-    # Controles del sistema (tema y pausa de auto-refresco): se dibujan antes
-    # de cargar los datos porque no dependen de ellos, y así quedan arriba
-    # del todo en el sidebar.
     tema, pausado = componentes.controles_sistema_sidebar()
     estilos.inyectar_css_global(tema)
 
     # Refresca automáticamente el dashboard cada 5 minutos (alertas e
-    # incidentes), salvo que el usuario lo haya pausado desde el sidebar.
+    # incidentes), salvo que el usuario lo haya pausado desde el sidebar de la web.
     if not pausado:
         st_autorefresh(interval=SEGUNDOS_REFRESCO_DASHBOARD * 1000, key="autorefresco_dashboard")
 

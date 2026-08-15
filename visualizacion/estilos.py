@@ -1,17 +1,9 @@
 """
-Estilo visual del dashboard: tema claro/oscuro tipo "producto SaaS" (tarjetas
-blancas redondeadas con sombra suave) y tarjetas de métricas de colores.
-
-Streamlit no permite cambiar el tema (config.toml) en tiempo real desde el
-código, así que el interruptor Claro/Oscuro del sidebar funciona inyectando
-CSS propio (`inyectar_css_global`) que sobreescribe los colores base cada vez
-que se vuelve a ejecutar el script — el usuario puede alternar entre ambos
-sin recargar la página.
+Estilo visual del dashboard: tema claro/oscuro.
 """
 
 import streamlit as st
 
-# -- Paletas ------------------------------------------------------------
 PALETA_CLARO = {
     "fondo": "#F5F6FA",
     "tarjeta": "#FFFFFF",
@@ -32,23 +24,9 @@ PALETA_OSCURO = {
     "sombra": "rgba(0, 0, 0, 0.45)",
 }
 
-# Colores para las tarjetas de KPI (estilo "Users / Sites / Patients")
 COLORES_TARJETAS = ["#7C5CBF", "#F2545B", "#27C28B", "#3B82F6", "#F5A623", "#00B8D9"]
 
-
 def inyectar_css_global(tema: str = "Oscuro") -> None:
-    """Inyecta el CSS que le da al dashboard un estilo tipo producto SaaS
-    (tarjetas redondeadas, sombra suave, tabs y botones estilizados) y
-    aplica la paleta Claro/Oscuro elegida por el usuario.
-
-    Importante: los menús desplegables de Streamlit (calendario del filtro
-    de fechas, lista del multiselect de departamento, etc.) los dibuja la
-    librería BaseWeb en un "portal" que se inserta como hijo directo de
-    <body>, FUERA del contenedor `.stApp`. Por eso este CSS no puede
-    limitarse a reglas `.stApp ...`: también necesita reglas globales sin
-    ese prefijo (`div[data-baseweb="calendar"]`, `div[data-baseweb="popover"]`,
-    `ul[role="listbox"]`, etc.) para que esos menús respeten el tema elegido.
-    """
     p = PALETA_OSCURO if tema == "Oscuro" else PALETA_CLARO
 
     st.markdown(
@@ -186,11 +164,6 @@ def inyectar_css_global(tema: str = "Oscuro") -> None:
 
 
 def colores_grafico() -> dict:
-    """
-    Colores para las figuras de Plotly, según el tema Claro/Oscuro elegido
-    en el sidebar (leído de `st.session_state`, para no tener que pasar el
-    tema como parámetro a cada función de `graficos.py`/`mapa.py`).
-    """
     tema = st.session_state.get("tema_seleccionado", "Oscuro")
     if tema == "Claro":
         return {
@@ -208,8 +181,6 @@ def colores_grafico() -> dict:
 
 
 def tarjeta_metrica(icono: str, titulo: str, valor: str, color: str, subtitulo: str = "") -> str:
-    """Devuelve el HTML de una tarjeta de KPI de color sólido, estilo
-    "producto SaaS" (icono + título arriba, valor grande abajo)."""
     subtitulo_html = (
         f"<div style='color:rgba(255,255,255,0.85); font-size:0.85rem; margin-top:4px;'>{subtitulo}</div>"
         if subtitulo else ""
@@ -230,13 +201,6 @@ def tarjeta_metrica(icono: str, titulo: str, valor: str, color: str, subtitulo: 
 
 
 def fila_tarjetas(tarjetas: list[dict]) -> None:
-    """
-    Dibuja una fila de tarjetas de KPI en columnas iguales.
-
-    `tarjetas` es una lista de dicts con las llaves: icono, titulo, valor,
-    y opcionalmente subtitulo y color (si no se da color, se asigna uno de
-    `COLORES_TARJETAS` en orden, rotando si hay más tarjetas que colores).
-    """
     columnas = st.columns(len(tarjetas))
     for i, (col, tarjeta) in enumerate(zip(columnas, tarjetas)):
         color = tarjeta.get("color") or COLORES_TARJETAS[i % len(COLORES_TARJETAS)]

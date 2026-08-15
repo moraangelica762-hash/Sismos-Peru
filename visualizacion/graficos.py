@@ -1,11 +1,6 @@
 """
 Gráficos que responden a las 5 preguntas de negocio del proyecto.
 
-Cada función recibe el DataFrame ya transformado (con columnas de
-`transformacion.procesamiento`) y devuelve una figura de Plotly lista
-para `st.plotly_chart`. Se usan aquí y NO en el notebook de exposición:
-el notebook genera sus propias figuras de forma independiente, como
-pide el enunciado del proyecto.
 """
 
 import pandas as pd
@@ -19,12 +14,6 @@ ESCALA_MAGNITUD = "OrRd"
 
 
 def _aplicar_tema_grafico(fig: go.Figure) -> go.Figure:
-    """
-    Aplica al fondo/letras/grilla de la figura los colores del tema
-    Claro/Oscuro elegido en el sidebar (ver `estilos.colores_grafico`), para
-    que los gráficos no se queden con fondo blanco fijo cuando el resto del
-    dashboard está en modo oscuro (o viceversa).
-    """
     c = estilos.colores_grafico()
     fig.update_layout(
         plot_bgcolor=c["plot_bgcolor"],

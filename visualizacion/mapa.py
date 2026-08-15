@@ -1,26 +1,17 @@
 """
 Mapa dinámico de epicentros con filtros de tiempo, magnitud y profundidad.
-
-Se usa Plotly (scatter_mapbox con estilo "open-street-map", sin requerir
-token) para mantener una sola librería de gráficos en todo el dashboard.
-Los epicentros se colorean por categoría de severidad (en vez de una escala
-continua), con un hover enriquecido tipo "tarjeta" (lugar, magnitud,
-profundidad y coordenadas), buscando un estilo visual más parecido a mapas
-de sismos tipo pines (Latest Earthquakes / USGS), manteniendo Plotly como
-única librería de gráficos del proyecto.
 """
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# Categorías de severidad y su color, en el orden en que deben aparecer en
-# la leyenda (de menor a mayor magnitud).
+# Categorías de severidad y su color, en el orden en que deben aparecer en la leyenda (de menor a mayor magnitud).
 COLOR_SEVERIDAD = {
-    "Leve (M < 4)": "#2ECC71",        # verde
-    "Moderado (M 4 - 5.9)": "#3498DB",  # azul
-    "Fuerte (M 6 - 6.9)": "#E67E22",  # naranja
-    "Mayor (M ≥ 7)": "#C0392B",       # rojo
+    "Leve (M < 4)": "#2ECC71",
+    "Moderado (M 4 - 5.9)": "#3498DB",
+    "Fuerte (M 6 - 6.9)": "#E67E22",
+    "Mayor (M ≥ 7)": "#C0392B",
 }
 ORDEN_SEVERIDAD = list(COLOR_SEVERIDAD.keys())
 
@@ -36,7 +27,6 @@ def _categoria_severidad(magnitud: float) -> str:
 
 
 def mapa_dinamico_sismos(df: pd.DataFrame) -> go.Figure:
-    """Genera el mapa de epicentros ya filtrado por el llamador (sidebar)."""
     if df.empty:
         fig = go.Figure()
         fig.update_layout(

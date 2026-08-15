@@ -2,9 +2,7 @@
 Configuración central de la capa de ingesta.
 
 Define la fuente de datos (API de la USGS), la ventana geográfica de Perú,
-rutas de almacenamiento y parámetros de resiliencia de red (reintentos,
-timeouts). El resto del proyecto importa estas constantes desde aquí para
-evitar valores mágicos repetidos.
+rutas de almacenamiento y parámetros de resiliencia de red (reintentos, timeouts).
 """
 
 import os
@@ -12,28 +10,16 @@ from zoneinfo import ZoneInfo
 
 # -- Zona horaria -----------------------------------------------------------
 # Los datos se ALMACENAN siempre en UTC (así los entrega la API de la USGS,
-# y es el estándar para datos sismológicos). Esta zona horaria se usa
-# únicamente para MOSTRAR fechas/horas de forma intuitiva al usuario en el
-# dashboard (Perú no tiene horario de verano, por lo que el offset UTC-5 es
-# fijo todo el año).
+# y es el estándar para datos sismológicos). 
 ZONA_HORARIA_PERU = ZoneInfo("America/Lima")
 
 # -- API USGS -------------------------------------------------------------
-# Todo el proyecto usa el endpoint de CONSULTA en tiempo real (`URL_API_USGS`),
-# tanto para la ingesta histórica como para los datos "en vivo" (alertas y
-# últimos sismos). Deliberadamente NO se usan los feeds resumen pre-generados
-# de la USGS (`.../summary/2.5_day.geojson`, etc.): esos archivos los
-# regenera la USGS cada varios minutos, así que pueden mostrarse
-# desactualizados frente a una consulta directa a la base de datos en vivo.
 URL_API_USGS = "https://earthquake.usgs.gov/fdsnws/event/1/query"
 URL_API_USGS_COUNT = "https://earthquake.usgs.gov/fdsnws/event/1/count"
 
 # -- IGP (Instituto Geofísico del Perú) — fuente COMPLEMENTARIA, no oficial -
 # Endpoint WFS/GeoServer (no documentado públicamente por el IGP) que
 # devuelve el último sismo detectado por la red sísmica nacional del Perú.
-# Es más sensible a eventos locales pequeños que la USGS, pero al no ser una
-# API oficial documentada, se trata como "best effort": si falla, el
-# dashboard simplemente no muestra ese widget (ver `visualizacion/componentes.py`).
 URL_IGP_ULTIMO_SISMO = (
     "https://ide.igp.gob.pe/geoserver/CTS_ultimosismo/ows"
     "?service=WFS&version=2.0.0&request=GetFeature"
@@ -42,9 +28,7 @@ URL_IGP_ULTIMO_SISMO = (
 TIMEOUT_IGP_SEGUNDOS = 8
 
 # Capa WFS con el listado (no solo el último) de sismos reportados por el IGP
-# en lo que va del año en curso. A diferencia de `URL_IGP_ULTIMO_SISMO` (que
-# devuelve un único registro), esta sí permite pedir varios eventos a la vez
-# (parámetros `count` y `sortBy`), por lo que es la fuente que usa la tabla
+# en lo que va del año en curso. Fuente que usa la tabla
 # principal de "últimos sismos" del dashboard.
 URL_IGP_SISMOS_REPORTADOS = (
     "https://ide.igp.gob.pe/geoserver/sismos_reportados/ows"
@@ -53,7 +37,7 @@ URL_IGP_SISMOS_REPORTADOS = (
     "&outputFormat=application/json"
 )
 
-# -- Ventana geográfica de Perú --------------------------------------------
+# -- Zona geográfica que abarca Perú --------------------------------------------
 BBOX_PERU = {
     "minlatitude": -19.5,
     "maxlatitude": 0.5,

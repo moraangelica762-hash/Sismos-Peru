@@ -1,13 +1,5 @@
 """
 main.py — Orquestador del proyecto.
-
-Ejecuta la ingesta de datos (si hace falta) y luego lanza la Data App de
-Streamlit. Pensado para levantar el proyecto completo con un solo comando:
-
-    python main.py
-
-Para Streamlit Cloud no se usa este archivo: la plataforma ejecuta
-directamente `app.py` (ver README.md, sección "Despliegue").
 """
 
 import subprocess

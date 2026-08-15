@@ -1,6 +1,5 @@
 """
-Componentes reutilizables de la interfaz: sidebar de filtros, panel de
-alertas recientes (refrescado cada 5 minutos) y visor de logs.
+Componentes reutilizables de la interfaz: sidebar de filtros, panel de alertas recientes (refrescado cada 5 minutos) y visor de logs.
 """
 
 import datetime
@@ -26,30 +25,18 @@ from ingesta.configuracion import (
 from transformacion.procesamiento import departamento_mas_cercano, departamento_y_distancia_km
 from visualizacion import estilos
 
-# Ventana de búsqueda para la tabla de "últimos sismos": como se exige
-# magnitud > 3.5 (más estricto que el mínimo del panel de alertas), se
-# necesita una ventana más amplia que unos pocos días para garantizar
-# suficientes eventos.
+# Ventana de búsqueda para la tabla de "últimos sismos": 
 DIAS_VENTANA_ULTIMOS_SISMOS = 180
 
 # Ventana del panel de "alertas recientes" y magnitud mínima considerada
-# alerta (más sensible que el umbral de 3.5 del resto del dashboard).
 DIAS_VENTANA_ALERTAS = 2
 MAGNITUD_MINIMA_ALERTAS = 2.5
-
-# NOTA IMPORTANTE: todo lo que consulta datos "en vivo" en este módulo golpea
-# directamente el endpoint de consulta de la USGS (`URL_API_USGS`, base de
-# datos en tiempo real) y NO los feeds resumen pre-generados
-# (`.../summary/2.5_day.geojson`, etc.). Esos feeds son archivos que la USGS
-# regenera cada varios minutos, así que pueden mostrarse desactualizados
-# frente a una consulta directa a la API — por eso no se usan aquí.
 
 log = logging.getLogger("dashboard")
 
 SEGUNDOS_REFRESCO_ALERTAS = 300  # 5 minutos
 
-# Columnas que se muestran en la tabla de últimos sismos, en este orden, y su
-# etiqueta en español (hora local de Lima, no UTC, para que sea intuitiva)
+# Columnas que se muestran en la tabla de últimos sismos.
 COLUMNAS_TABLA_SISMOS = {
     "fecha_hora_lima": "Fecha y hora (Lima)",
     "departamento": "Departamento",
@@ -66,7 +53,7 @@ def controles_sistema_sidebar() -> tuple[str, bool]:
     """
     Controles del sidebar que NO dependen del dataset (se pueden dibujar
     antes de cargar los datos): selector de tema (Claro/Oscuro) y pausa de
-    la actualización automática cada 5 minutos. Devuelve `(tema, pausado)`.
+    la actualización automática cada 5 minutos. Se pone tema por defecto el oscurito.
     """
     st.sidebar.header("⚙️ Controles del sistema")
 
@@ -89,17 +76,13 @@ def controles_sistema_sidebar() -> tuple[str, bool]:
 
 
 def sidebar_filtros(df: pd.DataFrame) -> dict:
-    """Dibuja los controles del sidebar (en español) y devuelve los valores elegidos."""
+    """Dibuja los controles del sidebar y devuelve los valores elegidos."""
     st.sidebar.header("🔎 Filtros del dashboard")
 
     fecha_min = df["fecha_hora_lima"].min().date()
     fecha_max_datos = df["fecha_hora_lima"].max().date()
     fecha_hoy = datetime.datetime.now(ZONA_HORARIA_PERU).date()
 
-    # La fecha final del selector siempre parte de "hoy" en hora de Lima (no de
-    # la última fecha cacheada), así el filtro no queda atado a cuándo se
-    # generó el Parquet. Todo el dashboard muestra fechas en hora de Perú
-    # (UTC-5); por dentro los datos se siguen almacenando en UTC.
     rango_fechas = st.sidebar.date_input(
         "Rango de fechas (hora de Lima)",
         value=(fecha_min, fecha_hoy),
@@ -157,17 +140,15 @@ def sidebar_filtros(df: pd.DataFrame) -> dict:
 
 def aviso_datos_actualizados(df: pd.DataFrame) -> None:
     """
-    Aviso (arriba a la derecha) con la fecha y hora de la última verificación
-    del sistema, en hora de Lima (Perú, UTC-5). Se recalcula cada vez que se
-    renderiza la página, así que siempre refleja el momento en que la app
-    revisó los datos (o hace <24h, según `asegurar_datos_actualizados`).
+    Aviso con la fecha y hora de la última verificación del sistema. Se recalcula cada vez que se
+    renderiza la página, así que siempre refleja el momento en que la app revisó los datos.
     """
     ahora_lima = datetime.datetime.now(ZONA_HORARIA_PERU)
     st.metric("🔄 Última verificación", ahora_lima.strftime("%d/%m/%Y %H:%M"))
 
 
 def aplicar_filtros(df: pd.DataFrame, filtros: dict) -> pd.DataFrame:
-    """Aplica al DataFrame los valores devueltos por `sidebar_filtros` (fechas en hora de Lima)."""
+    """Aplica al DataFrame los valores devueltos por `sidebar_filtros`."""
     resultado = df[
         (df["fecha_hora_lima"].dt.date >= filtros["fecha_inicio"])
         & (df["fecha_hora_lima"].dt.date <= filtros["fecha_fin"])
@@ -182,7 +163,7 @@ def aplicar_filtros(df: pd.DataFrame, filtros: dict) -> pd.DataFrame:
 @st.cache_data(ttl=SEGUNDOS_REFRESCO_ALERTAS, show_spinner="Consultando los últimos sismos en Perú (USGS)...")
 def obtener_ultimos_sismos_peru(cantidad: int = 30) -> pd.DataFrame:
     """
-    Consulta en vivo la API de la USGS (bbox de Perú, magnitud > 3.5, ventana
+    Consulta en vivo la API de la USGS (bbox de Perú, magnitud > 3, ventana
     de `DIAS_VENTANA_ULTIMOS_SISMOS` días) ordenada por fecha descendente,
     calcula el departamento de cada evento y devuelve los `cantidad` más
     recientes. Cacheado 5 minutos: es la MISMA caché que usa el resto del
@@ -264,18 +245,11 @@ def obtener_ultimos_sismos_igp(cantidad: int = 30) -> pd.DataFrame:
     """
     Consulta en vivo la capa WFS del IGP (`sismos_reportados`, "año en curso"),
     pidiendo directamente los `cantidad` eventos más recientes ya ordenados
-    por fecha/hora descendente (`sortBy`, `count`). A diferencia del endpoint
-    `URL_IGP_ULTIMO_SISMO` (que solo trae 1 registro), esta capa sí permite
-    listar varios sismos, así que es la fuente PRINCIPAL de la tabla de
-    "últimos sismos" del dashboard — reemplaza a la USGS para este propósito
-    porque el IGP suele detectar antes eventos locales de menor magnitud.
+    por fecha/hora descendente (`sortBy`, `count`). 
 
     El IGP no es una API oficial/documentada, así que esta función usa
     `peticion_con_reintentos` (igual que las llamadas a la USGS) para darle
-    resiliencia ante fallos pasajeros, pero si aun así falla o devuelve datos
-    inutilizables, hace un FALLBACK automático a `obtener_ultimos_sismos_peru`
-    (USGS): la tabla principal del dashboard nunca debe quedarse vacía por un
-    problema del IGP.
+    resiliencia ante fallos pasajeros.
     """
     parametros = {
         "service": "WFS",
@@ -304,9 +278,7 @@ def obtener_ultimos_sismos_igp(cantidad: int = 30) -> pd.DataFrame:
             if not fecha_raw or not hora_raw or lat is None or lon is None:
                 continue
 
-            # `fecha` viene como ISO ("2026-08-14T05:00:00Z"): solo la parte de
-            # fecha es fiable, la hora real del evento (en hora de Lima) va en
-            # el campo `hora` por separado.
+            # `fecha` viene como ISO ("2026-08-14T05:00:00Z"): 
             fecha_parte = fecha_raw.split("T")[0]
             fecha_hora_naive = datetime.datetime.strptime(
                 f"{fecha_parte} {hora_raw}", "%Y-%m-%d %H:%M:%S"
@@ -348,7 +320,7 @@ def obtener_ultimos_sismos_igp(cantidad: int = 30) -> pd.DataFrame:
 def tabla_ultimos_sismos(cantidad: int = 30) -> None:
     """
     Tabla ag-Grid con los últimos sismos registrados en Perú (columna de magnitud
-    coloreada por severidad), inspirada en el ejemplo `Latest-Earthquakes-main`.
+    coloreada por severidad).
 
     A diferencia del dataset histórico (caché Parquet estática de 50 años usada
     en los gráficos de preguntas de negocio), esta tabla consulta datos EN VIVO
@@ -376,12 +348,9 @@ def tabla_ultimos_sismos(cantidad: int = 30) -> None:
     constructor_grilla.configure_default_column(resizable=True, sortable=True, filter=True)
     constructor_grilla.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=cantidad)
     constructor_grilla.configure_selection(selection_mode="multiple", use_checkbox=True, header_checkbox=True)
-    # Orden por defecto: el sismo más reciente primero (los datos ya vienen
-    # ordenados así desde `obtener_ultimos_sismos_peru`, pero se fija también
-    # en la grilla para que no cambie si el usuario reordena y vuelve a cargar)
     constructor_grilla.configure_column("Fecha y hora (Lima)", sort="desc")
 
-    # Colorea la columna de magnitud según severidad (mismo criterio que el mapa dinámico)
+    # Colorea la columna de magnitud según severidad.
     estilo_celda_magnitud = JsCode(
         """
         function(params) {
@@ -424,8 +393,6 @@ def obtener_sismos_recientes() -> pd.DataFrame:
     Consulta en vivo la API de la USGS (bbox de Perú, magnitud >= 2.5,
     últimas `DIAS_VENTANA_ALERTAS` días) directamente contra el endpoint de
     consulta en tiempo real — no contra un feed resumen pre-generado.
-    Cacheado 5 minutos: cada 5 min que el usuario interactúa con la app (o
-    por el `st_autorefresh`), se vuelve a consultar la USGS.
     """
     fecha_inicio = (datetime.date.today() - datetime.timedelta(days=DIAS_VENTANA_ALERTAS)).isoformat()
     fecha_fin = (datetime.date.today() + datetime.timedelta(days=1)).isoformat()
@@ -484,20 +451,6 @@ def obtener_ultimo_sismo_igp() -> dict | None:
     """
     Consulta el endpoint WFS/GeoServer del IGP (Instituto Geofísico del Perú)
     que devuelve el último sismo detectado por la red sísmica nacional.
-
-    Es una fuente COMPLEMENTARIA y no oficial/documentada (a diferencia de la
-    USGS): más sensible a eventos locales pequeños, pero sin garantía de
-    disponibilidad. Por eso esta función es deliberadamente "best effort":
-    - Una sola petición liviana, sin los reintentos/backoff de `peticion_con_reintentos`
-      (que están pensados para la USGS).
-    - Cualquier fallo (red, timeout, JSON inválido, estructura inesperada)
-      se captura de forma amplia y se resuelve devolviendo `None`, sin lanzar
-      excepciones ni dibujar ningún elemento de Streamlit — la UI decide qué
-      hacer con `None` (en este proyecto: no mostrar nada, ver
-      `widget_ultimo_sismo_igp`).
-    - Solo se registra en el log a nivel INFO (nunca ERROR/WARNING ni un
-      `st.warning`), porque no responder es un caso esperado, no un error del
-      sistema.
     """
     try:
         respuesta = requests.get(URL_IGP_ULTIMO_SISMO, timeout=TIMEOUT_IGP_SEGUNDOS)
@@ -523,11 +476,6 @@ def obtener_ultimo_sismo_igp() -> dict | None:
 def widget_ultimo_sismo_igp() -> None:
     """
     Widget complementario con el último sismo reportado por el IGP.
-
-    Condición explícita: si el endpoint del IGP no responde o la respuesta no
-    es utilizable, este widget NO muestra absolutamente nada — ni título, ni
-    aviso de error, ni placeholder. Es decir, si `obtener_ultimo_sismo_igp()`
-    devuelve `None`, la función simplemente retorna sin dibujar nada.
     """
     ultimo = obtener_ultimo_sismo_igp()
     if ultimo is None:
@@ -552,18 +500,18 @@ def widget_ultimo_sismo_igp() -> None:
 
 
 def _color_severidad_alerta(magnitud: float) -> str:
-    """Color según severidad, mismo criterio que la columna Magnitud de la tabla AgGrid."""
+    """Color según severidad."""
     if magnitud >= 7:
-        return "#B22222"  # firebrick
+        return "#B22222" 
     if magnitud >= 6:
-        return "#D2691E"  # chocolate
+        return "#D2691E"
     if magnitud >= 5:
-        return "#6B8E23"  # olivedrab
+        return "#6B8E23"
     return "#3498DB"  # azul (por defecto)
 
 
 def panel_alertas_recientes() -> None:
-    """Panel de alertas e incidentes recientes (últimas 48h), refrescado cada 5 minutos."""
+    """Panel de alertas e incidentes recientes."""
     st.subheader("🚨 Alertas y panel de incidentes recientes")
     st.caption("Se refresca automáticamente cada 5 minutos.")
 
