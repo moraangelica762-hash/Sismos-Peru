@@ -1,0 +1,16 @@
+# Ingesta
+requests==2.32.3
+tzdata==2024.2  # base de datos de zonas horarias (America/Lima) para zoneinfo en Windows
+
+# Datos y almacenamiento (Parquet)
+pandas==2.2.3
+pyarrow==17.0.0
+
+# Transformación / validación de esquemas
+pandera==0.20.4
+
+# Dashboard
+streamlit==1.39.0
+streamlit-autorefresh==1.0.1
+plotly==5.24.1
+streamlit-aggrid==1.0.5
