@@ -66,7 +66,7 @@ def preparar_datos(df: pd.DataFrame) -> pd.DataFrame:
 
 @st.cache_data(ttl=3600, show_spinner="Ejecutando análisis no supervisado...")
 def preparar_modelos(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
-    """Ejecuta modelos deterministas y cachea el resultado por conjunto filtrado."""
+    """Cache de modelos v2: silhouette muestreado y tamaño de evaluación."""
     return analizar_patrones_sismicos(df)
 
 
@@ -138,7 +138,8 @@ def seccion_analisis_avanzado(df: pd.DataFrame) -> None:
         "K-means selecciona k por silhouette; Isolation Forest marca el 2% más atípico. "
         "Variables: magnitud, profundidad, latitud y longitud. Semilla fija: 42."
     )
-    st.caption(f"Silhouette estimado con {metricas['muestra_silhouette']:,} eventos.")
+    if "muestra_silhouette" in metricas:
+        st.caption(f"Silhouette estimado con {metricas['muestra_silhouette']:,} eventos.")
     st.plotly_chart(
         analisis_avanzado.grafico_clusters(resultado),
         use_container_width=True,

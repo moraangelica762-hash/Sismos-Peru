@@ -208,6 +208,6 @@ La app se abre automáticamente en `http://localhost:8501`. El entorno virtual
 ## 🔗 Enlaces del proyecto
 
 - **Repositorio en GitHub:** [moraangelica762-hash/Sismos-Peru](https://github.com/moraangelica762-hash/Sismos-Peru)
-- **App en Streamlit Cloud:** [sismos-peru-app](https://sismos-peru-app-rvzuufwndrfps97suyyn7k.streamlit.app/)
+- **App en Streamlit Cloud:** [Sismos Perú](https://ku253hjneak74oyvvorabn.streamlit.app/)
 
 ---
