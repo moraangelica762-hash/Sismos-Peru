@@ -1,14 +1,4 @@
-"""
-app.py — Punto de entrada de la Data App de Streamlit.
-
-Capas del proyecto:
-
-    ingesta/         -> descarga y cachea los datos en Parquet
-    transformacion/  -> valida (Pandera) y enriquece (feature engineering)
-    visualizacion/   -> gráficos, mapa y componentes de la interfaz
-
-Ejecutar localmente con:  streamlit run app.py
-"""
+"""Dashboard de sismos. Ejecutar con: streamlit run app.py."""
 
 import logging
 
@@ -33,7 +23,6 @@ log = logging.getLogger("dashboard")
 SEGUNDOS_REFRESCO_DASHBOARD = 300  # equivale a 5 minutos
 
 
-# ── Configuración de página ────────────────────────────────────────────────
 def configurar_pagina() -> None:
     st.set_page_config(
         page_title="Sismos en Perú | Análisis Histórico y Alertas",
@@ -43,13 +32,9 @@ def configurar_pagina() -> None:
     )
 
 
-# ── Carga de datos (cacheada) ───────────────────────────────────────────────
 @st.cache_data(ttl=3600, show_spinner="Verificando y cargando dataset histórico de sismos...")
 def cargar_datos_crudos() -> pd.DataFrame:
-    """
-    Carga desde Parquet. Si no existe, corre la ingesta histórica completa; si
-    existe pero está desactualizado, se dispara una actualización incremental automática antes de leerlo.
-    """
+    """Actualiza el histórico si corresponde y valida los datos almacenados."""
     asegurar_datos_actualizados(horas_maximas_antiguedad=24)
     df = leer_sismos_parquet()
     df = validar_sismos_crudos(df)
@@ -66,11 +51,10 @@ def preparar_datos(df: pd.DataFrame) -> pd.DataFrame:
 
 @st.cache_data(ttl=3600, show_spinner="Ejecutando análisis no supervisado...")
 def preparar_modelos(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
-    """Cache de modelos v2: silhouette muestreado y tamaño de evaluación."""
+    """Cachea los resultados del modelo para el conjunto de datos seleccionado."""
     return analizar_patrones_sismicos(df)
 
 
-# ── Secciones del dashboard ─────────────────────────────────────────────────
 def seccion_resumen(df: pd.DataFrame) -> None:
     anios_cubiertos = df["anio"].max() - df["anio"].min()
     estilos.fila_tarjetas([
@@ -157,15 +141,12 @@ def seccion_analisis_avanzado(df: pd.DataFrame) -> None:
     st.caption("Cada resultado se recalcula desde los datos visibles; no son porcentajes declarativos.")
 
 
-# ── Aplicación principal ─────────────────────────────────────────────────────
 def main() -> None:
     configurar_pagina()
 
     tema, pausado = componentes.controles_sistema_sidebar()
     estilos.inyectar_css_global(tema)
 
-    # Refresca automáticamente el dashboard cada 5 minutos (alertas e
-    # incidentes), salvo que el usuario lo haya pausado desde el sidebar de la web.
     if not pausado:
         st_autorefresh(interval=SEGUNDOS_REFRESCO_DASHBOARD * 1000, key="autorefresco_dashboard")
 

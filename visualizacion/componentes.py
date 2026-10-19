@@ -162,14 +162,9 @@ def aplicar_filtros(df: pd.DataFrame, filtros: dict) -> pd.DataFrame:
 
 @st.cache_data(ttl=SEGUNDOS_REFRESCO_ALERTAS, show_spinner="Consultando los últimos sismos en Perú (USGS)...")
 def obtener_ultimos_sismos_peru(cantidad: int = 30) -> pd.DataFrame:
-    """
-    Consulta en vivo la API de la USGS (bbox de Perú, magnitud > 3, ventana
-    de `DIAS_VENTANA_ULTIMOS_SISMOS` días) ordenada por fecha descendente,
-    calcula el departamento de cada evento y devuelve los `cantidad` más
-    recientes. Cacheado 5 minutos: es la MISMA caché que usa el resto del
-    dashboard para "vivo", así que esta tabla se actualiza sola cada 5 minutos
-    (gracias al `st_autorefresh` configurado en `app.py`), sin que el usuario
-    tenga que ejecutar nada manualmente.
+    """Consulta los eventos USGS más recientes dentro del bbox configurado.
+
+    La respuesta se conserva en caché durante cinco minutos.
     """
     fecha_inicio = (
         datetime.date.today() - datetime.timedelta(days=DIAS_VENTANA_ULTIMOS_SISMOS)
@@ -318,15 +313,7 @@ def obtener_ultimos_sismos_igp(cantidad: int = 30) -> pd.DataFrame:
 
 
 def tabla_ultimos_sismos(cantidad: int = 30) -> None:
-    """
-    Tabla ag-Grid con los últimos sismos registrados en Perú (columna de magnitud
-    coloreada por severidad).
-
-    A diferencia del dataset histórico (caché Parquet estática de 50 años usada
-    en los gráficos de preguntas de negocio), esta tabla consulta datos EN VIVO
-    y se refresca sola cada 5 minutos. Fuente principal: IGP (más sensible a
-    eventos locales); si el IGP no responde, se usa automáticamente la USGS.
-    """
+    """Muestra los eventos recientes del IGP, con USGS como fuente de respaldo."""
     st.markdown(f"##### 📋 Últimos {cantidad} sismos reportados en Perú")
     st.caption(
         "Fuente: IGP (Instituto Geofísico del Perú), con respaldo automático a la USGS "

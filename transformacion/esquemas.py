@@ -1,13 +1,4 @@
-"""
-Esquemas de validación de datos con Pandera.
-
-Esta es la capa de "contrato de datos": antes de que cualquier gráfico o
-tabla llegue al dashboard, el DataFrame pasa por `esquema_sismos_crudos`
-(estructura que entrega la ingesta) y luego por `esquema_sismos_enriquecidos`
-(después del feature engineering). Si algo no calza -tipos, rangos
-geográficos, magnitudes imposibles- Pandera lanza un error explícito en
-lugar de dejar pasar datos corruptos al dashboard.
-"""
+"""Esquemas Pandera para validar tipos, unicidad y rangos de los datos sísmicos."""
 
 import pandera as pa
 from pandera import Column, Check, DataFrameSchema

@@ -1,9 +1,4 @@
-"""
-Transforma el DataFrame crudo (salida de la ingesta) en un DataFrame
-enriquecido con las columnas que necesitan los gráficos: año, mes,
-estación del año, década, país y departamento (región) del evento, y
-categoría de profundidad. Este módulo naún no conoce Streamlit: solo pandas.
-"""
+"""Calcula variables temporales, referencias geográficas y categorías de profundidad."""
 
 import math
 import logging

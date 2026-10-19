@@ -208,12 +208,7 @@ def _normalizar_lote(features: list) -> pd.DataFrame:
 
 
 def normalizar_sismos(features: list, tamano_lote: int = 5_000) -> pd.DataFrame:
-    """Aplana GeoJSON por lotes para limitar el pico de memoria.
-
-    La interfaz se mantiene compatible con el resto del proyecto, pero la
-    construcción interna deja de acumular todos los diccionarios normalizados
-    simultáneamente. ``tamano_lote`` permite demostrar escalabilidad.
-    """
+    """Normaliza GeoJSON en lotes y concatena sus resultados en memoria."""
     if tamano_lote <= 0:
         raise ValueError("tamano_lote debe ser mayor que cero.")
     log.info("Normalizando %s eventos en lotes de %s...", len(features), tamano_lote)
@@ -283,12 +278,7 @@ def leer_sismos_parquet(
 
 
 def ejecutar_ingesta_completa(forzar: bool = False) -> str:
-    """
-    Punto de entrada de la capa de ingesta para la carga histórica completa.
-
-    Si ya existe un Parquet cacheado y `forzar=False`, no vuelve a consultar la
-    API.
-    """
+    """Descarga el histórico si no existe caché o si se solicita forzar la carga."""
     if os.path.exists(RUTA_PARQUET) and not forzar:
         log.info(f"Se encontró caché Parquet existente en {RUTA_PARQUET}. Se omite la descarga.")
         return RUTA_PARQUET
@@ -310,16 +300,10 @@ def ejecutar_ingesta_completa(forzar: bool = False) -> str:
 
 
 def actualizar_incrementalmente(margen_dias: int = 2) -> str:
-    """
-    Descarga SOLO los eventos nuevos (o revisados) desde la última fecha
-    registrada en el Parquet cacheado hasta hoy, y los fusiona con el
-    histórico existente (deduplicando por `id_usgs`).
+    """Fusiona eventos recientes con el histórico y deduplica por ID USGS.
 
-    Es mucho más liviano que volver a descargar 50 años completos: por eso es
-    lo que permite mantener el dataset al día de forma automática, sin
-    sobrecargar la API de la USGS. `margen_dias` retrocede un par de días
-    sobre la última fecha cacheada para capturar eventos cuya magnitud fue
-    revisada después de ocurridos.
+    El margen temporal permite incorporar revisiones de eventos cercanos a
+    la última fecha almacenada.
     """
     if not os.path.exists(RUTA_PARQUET):
         log.info("No existe caché Parquet todavía; se ejecuta la ingesta histórica completa.")
@@ -366,17 +350,10 @@ def actualizar_incrementalmente(margen_dias: int = 2) -> str:
 
 
 def asegurar_datos_actualizados(horas_maximas_antiguedad: int = 24) -> str:
-    """
-    Punto de entrada usado por el dashboard (`app.py`) en cada carga.
+    """Carga el histórico o lo actualiza según la última sincronización exitosa.
 
-    - Si el Parquet no existe: corre la ingesta histórica completa (50 años).
-    - Si existe pero el último evento cacheado tiene más de
-      `horas_maximas_antiguedad` horas: dispara `actualizar_incrementalmente`
-      (liviana, solo trae lo nuevo) en vez de volver a descargar todo.
-    - Si ya está al día: no hace ninguna petición a la API.
-
-    Así el dataset histórico se mantiene actualizado de forma AUTOMÁTICA, sin
-    que nadie tenga que ejecutar nada manualmente.
+    Sin metadatos de sincronización se consulta la fuente. Ante un fallo de
+    actualización se conserva el archivo existente.
     """
     if not os.path.exists(RUTA_PARQUET):
         return ejecutar_ingesta_completa(forzar=True)
