@@ -17,6 +17,7 @@ from sklearn.preprocessing import StandardScaler
 
 VARIABLES_MODELO = ["magnitud", "profundidad_km", "latitud", "longitud"]
 SEMILLA = 42
+MAX_MUESTRA_SILHOUETTE = 1_000
 
 
 def _matriz_modelo(df: pd.DataFrame):
@@ -36,7 +37,13 @@ def seleccionar_numero_clusters(matriz, minimo: int = 2, maximo: int = 6) -> tup
     puntajes: dict[int, float] = {}
     for k in range(minimo, limite + 1):
         etiquetas = KMeans(n_clusters=k, random_state=SEMILLA, n_init=10).fit_predict(matriz)
-        puntajes[k] = float(silhouette_score(matriz, etiquetas))
+        # La matriz de distancias crece cuadráticamente. Una muestra fija
+        # mantiene acotada la memoria en Streamlit Community Cloud.
+        puntajes[k] = float(silhouette_score(
+            matriz, etiquetas,
+            sample_size=min(cantidad, MAX_MUESTRA_SILHOUETTE),
+            random_state=SEMILLA,
+        ))
     mejor_k = max(puntajes, key=puntajes.get)
     return mejor_k, puntajes
 
@@ -81,6 +88,7 @@ def analizar_patrones_sismicos(
         "eventos_entrenamiento": int(len(matriz_entrenamiento)),
         "numero_clusters": int(mejor_k),
         "silhouette": float(puntajes[mejor_k]),
+        "muestra_silhouette": min(len(matriz_entrenamiento), MAX_MUESTRA_SILHOUETTE),
         "silhouette_por_k": puntajes,
         "anomalias": int(resultado["es_anomalia"].sum()),
         "tasa_anomalias": float(resultado["es_anomalia"].mean()),

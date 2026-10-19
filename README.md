@@ -79,7 +79,8 @@ para inventar una ubicación cuando la fuente no la aporta.
 longitud y ejecuta:
 
 - **K-means**: elige entre 2 y 6 clusters mediante el mayor coeficiente
-  silhouette;
+  silhouette, evaluado sobre una muestra reproducible de hasta 1 000 eventos
+  para acotar la memoria del servidor;
 - **Isolation Forest**: identifica el 2% de eventos con combinaciones más
   atípicas;
 - semilla fija (`42`) y límite de 25 000 filas para el entrenamiento, de modo

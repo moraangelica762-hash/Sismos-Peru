@@ -138,6 +138,7 @@ def seccion_analisis_avanzado(df: pd.DataFrame) -> None:
         "K-means selecciona k por silhouette; Isolation Forest marca el 2% más atípico. "
         "Variables: magnitud, profundidad, latitud y longitud. Semilla fija: 42."
     )
+    st.caption(f"Silhouette estimado con {metricas['muestra_silhouette']:,} eventos.")
     st.plotly_chart(
         analisis_avanzado.grafico_clusters(resultado),
         use_container_width=True,
