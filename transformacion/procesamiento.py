@@ -8,6 +8,7 @@ categoría de profundidad. Este módulo naún no conoce Streamlit: solo pandas.
 import math
 import logging
 
+import numpy as np
 import pandas as pd
 
 from ingesta.configuracion import ZONA_HORARIA_PERU
@@ -123,11 +124,33 @@ def agregar_columnas_temporales(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def agregar_columnas_geograficas(df: pd.DataFrame) -> pd.DataFrame:
+    """Asigna el centroide más cercano con cálculo vectorizado por lotes."""
     df = df.copy()
     df["pais"] = df["lugar"].apply(extraer_pais)
-    df["departamento"] = df.apply(
-        lambda fila: departamento_mas_cercano(fila["latitud"], fila["longitud"]), axis=1
-    )
+    nombres = np.array(list(DEPARTAMENTOS_PERU))
+    centroides = np.radians(np.array(list(DEPARTAMENTOS_PERU.values()), dtype=float))
+    departamentos = np.full(len(df), "Sin dato", dtype=object)
+    tamano_lote = 50_000
+
+    for inicio in range(0, len(df), tamano_lote):
+        fin = min(inicio + tamano_lote, len(df))
+        coordenadas = df.iloc[inicio:fin][["latitud", "longitud"]].to_numpy(dtype=float)
+        validas = ~np.isnan(coordenadas).any(axis=1)
+        if not validas.any():
+            continue
+        puntos = np.radians(coordenadas[validas])
+        dlat = centroides[None, :, 0] - puntos[:, None, 0]
+        dlon = centroides[None, :, 1] - puntos[:, None, 1]
+        a = (
+            np.sin(dlat / 2) ** 2
+            + np.cos(puntos[:, None, 0])
+            * np.cos(centroides[None, :, 0])
+            * np.sin(dlon / 2) ** 2
+        )
+        indices = np.argmin(a, axis=1)
+        posiciones = np.flatnonzero(validas) + inicio
+        departamentos[posiciones] = nombres[indices]
+    df["departamento"] = departamentos
     return df
 
 

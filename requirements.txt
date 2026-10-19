@@ -5,6 +5,7 @@ tzdata==2024.2  # base de datos de zonas horarias (America/Lima) para zoneinfo e
 # Datos y almacenamiento (Parquet)
 pandas==2.2.3
 pyarrow==17.0.0
+scikit-learn==1.5.2
 
 # Transformación / validación de esquemas
 pandera==0.20.4

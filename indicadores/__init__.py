@@ -1,0 +1,1 @@
+"""Indicadores verificables del proyecto."""

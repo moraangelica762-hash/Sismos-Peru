@@ -7,12 +7,14 @@ históricos de Perú. Incluye manejo de errores de red con reintentos.
 """
 
 import datetime
+import json
 import logging
 import os
 import sys
 import time
 
 import pandas as pd
+import pyarrow.parquet as pq
 import requests
 
 from ingesta.configuracion import (
@@ -28,6 +30,7 @@ from ingesta.configuracion import (
     NOMBRE_DATASET,
     ANIOS_HISTORICO,
     RUTA_PARQUET,
+    RUTA_METADATA,
     TIMEOUT_SEGUNDOS,
     URL_API_USGS,
     URL_API_USGS_COUNT,
@@ -167,10 +170,8 @@ def ingesta_historica_peru(anios: int = ANIOS_HISTORICO, magnitud_minima: float 
     return todas_las_features
 
 
-def normalizar_sismos(features: list) -> pd.DataFrame:
-    """Aplana la estructura JSON anidada de GeoJSON (properties + geometry) a un DataFrame tabular."""
-    log.info("Normalizando estructura JSON anidada (properties + geometry)...")
-
+def _normalizar_lote(features: list) -> pd.DataFrame:
+    """Normaliza un lote acotado de objetos GeoJSON."""
     registros = []
     for sismo in features:
         propiedades = sismo.get("properties", {})
@@ -203,17 +204,82 @@ def normalizar_sismos(features: list) -> pd.DataFrame:
             "url_detalle": propiedades.get("url"),
         })
 
-    df = pd.DataFrame(registros)
+    return pd.DataFrame(registros)
+
+
+def normalizar_sismos(features: list, tamano_lote: int = 5_000) -> pd.DataFrame:
+    """Aplana GeoJSON por lotes para limitar el pico de memoria.
+
+    La interfaz se mantiene compatible con el resto del proyecto, pero la
+    construcción interna deja de acumular todos los diccionarios normalizados
+    simultáneamente. ``tamano_lote`` permite demostrar escalabilidad.
+    """
+    if tamano_lote <= 0:
+        raise ValueError("tamano_lote debe ser mayor que cero.")
+    log.info("Normalizando %s eventos en lotes de %s...", len(features), tamano_lote)
+    lotes = [
+        _normalizar_lote(features[inicio : inicio + tamano_lote])
+        for inicio in range(0, len(features), tamano_lote)
+    ]
+    df = pd.concat(lotes, ignore_index=True) if lotes else _normalizar_lote([])
     log.info(f"Normalización completa: {df.shape[0]} filas x {df.shape[1]} columnas")
     return df
 
 
 def guardar_parquet(df: pd.DataFrame, ruta: str = RUTA_PARQUET) -> str:
-    """Persiste el DataFrame como Parquet: formato único de la capa de datos de la app."""
-    df.to_parquet(ruta, engine="pyarrow", compression="snappy", index=False)
+    """Persiste Parquet comprimido con grupos de filas aptos para lectura selectiva."""
+    df = df.sort_values("fecha_hora_utc").reset_index(drop=True)
+    df.to_parquet(
+        ruta,
+        engine="pyarrow",
+        compression="zstd",
+        index=False,
+        row_group_size=10_000,
+    )
     tam_kb = os.path.getsize(ruta) / 1024
     log.info(f"Dataset Parquet guardado en: {ruta} ({tam_kb:.2f} KB)")
+    guardar_metadata_sincronizacion(len(df))
     return ruta
+
+
+def guardar_metadata_sincronizacion(total_eventos: int, eventos_recibidos: int | None = None) -> dict:
+    """Registra cuándo terminó una consulta válida, aunque no hubiera eventos nuevos."""
+    metadata = {
+        "fuente": "USGS FDSN Event Web Service",
+        "ultima_sincronizacion_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "total_eventos": int(total_eventos),
+        "eventos_recibidos": None if eventos_recibidos is None else int(eventos_recibidos),
+    }
+    temporal = f"{RUTA_METADATA}.tmp"
+    with open(temporal, "w", encoding="utf-8") as archivo:
+        json.dump(metadata, archivo, ensure_ascii=False, indent=2)
+    os.replace(temporal, RUTA_METADATA)
+    return metadata
+
+
+def obtener_metadata_ingesta() -> dict | None:
+    """Lee evidencia de sincronización; devuelve None si aún no existe o está dañada."""
+    try:
+        with open(RUTA_METADATA, "r", encoding="utf-8") as archivo:
+            return json.load(archivo)
+    except (FileNotFoundError, json.JSONDecodeError, OSError):
+        return None
+
+
+def leer_sismos_parquet(
+    ruta: str = RUTA_PARQUET,
+    columnas: list[str] | None = None,
+    fecha_inicio: str | None = None,
+    fecha_fin: str | None = None,
+) -> pd.DataFrame:
+    """Lee solo columnas y rangos necesarios mediante filtros de PyArrow."""
+    filtros = []
+    if fecha_inicio:
+        filtros.append(("fecha_hora_utc", ">=", pd.to_datetime(fecha_inicio, utc=True)))
+    if fecha_fin:
+        filtros.append(("fecha_hora_utc", "<", pd.to_datetime(fecha_fin, utc=True)))
+    tabla = pq.read_table(ruta, columns=columnas, filters=filtros or None)
+    return tabla.to_pandas()
 
 
 def ejecutar_ingesta_completa(forzar: bool = False) -> str:
@@ -259,7 +325,7 @@ def actualizar_incrementalmente(margen_dias: int = 2) -> str:
         log.info("No existe caché Parquet todavía; se ejecuta la ingesta histórica completa.")
         return ejecutar_ingesta_completa(forzar=True)
 
-    df_actual = pd.read_parquet(RUTA_PARQUET)
+    df_actual = leer_sismos_parquet()
     ultima_fecha_cacheada = df_actual["fecha_hora_utc"].max()
 
     fecha_inicio = (ultima_fecha_cacheada - datetime.timedelta(days=margen_dias)).date().isoformat()
@@ -280,6 +346,7 @@ def actualizar_incrementalmente(margen_dias: int = 2) -> str:
 
     if not features_nuevas:
         log.info("Sin eventos nuevos desde la última actualización. El caché ya está al día.")
+        guardar_metadata_sincronizacion(len(df_actual), eventos_recibidos=0)
         return RUTA_PARQUET
 
     df_nuevo = normalizar_sismos(features_nuevas)
@@ -315,15 +382,20 @@ def asegurar_datos_actualizados(horas_maximas_antiguedad: int = 24) -> str:
         return ejecutar_ingesta_completa(forzar=True)
 
     try:
-        df_actual = pd.read_parquet(RUTA_PARQUET)
-        ultima_fecha = df_actual["fecha_hora_utc"].max()
-        antiguedad = datetime.datetime.now(datetime.timezone.utc) - ultima_fecha
+        metadata = obtener_metadata_ingesta()
+        if metadata is None:
+            log.info("No hay evidencia de sincronización previa; se verifica la fuente incrementalmente.")
+            return actualizar_incrementalmente()
+        ultima_sincronizacion = pd.to_datetime(
+            metadata["ultima_sincronizacion_utc"], utc=True
+        ).to_pydatetime()
+        antiguedad = datetime.datetime.now(datetime.timezone.utc) - ultima_sincronizacion
 
         if antiguedad > datetime.timedelta(hours=horas_maximas_antiguedad):
-            log.info(f"Caché desactualizado (último evento hace {antiguedad}). Se dispara actualización incremental.")
+            log.info(f"Caché sin sincronizar hace {antiguedad}. Se dispara actualización incremental.")
             return actualizar_incrementalmente()
 
-        log.info(f"El caché Parquet está al día (último evento: {ultima_fecha}). No se requiere actualización.")
+        log.info(f"El caché Parquet está sincronizado (última consulta: {ultima_sincronizacion}).")
         return RUTA_PARQUET
 
     except Exception as e:

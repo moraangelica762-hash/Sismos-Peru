@@ -75,3 +75,4 @@ os.makedirs(DIR_LOGS, exist_ok=True)
 
 NOMBRE_DATASET = "sismos_peru"
 RUTA_PARQUET = os.path.join(DIR_DATOS_RAW, f"{NOMBRE_DATASET}.parquet")
+RUTA_METADATA = os.path.join(DIR_DATOS_RAW, f"{NOMBRE_DATASET}.metadata.json")

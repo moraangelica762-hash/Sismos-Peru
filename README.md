@@ -5,6 +5,11 @@ la API de la **USGS**, validación de esquemas con **Pandera** y visualización 
 **Plotly**. El proyecto responde 5 preguntas de negocio sobre la actividad sísmica
 histórica de Perú (últimos 50 años) y monitorea alertas recientes.
 
+Además incorpora una capa reproducible de **datos no estructurados**, análisis
+no supervisado (**K-means + Isolation Forest**), indicadores SMART calculados
+desde los datos y un benchmark de volumen. Los modelos describen patrones del
+histórico: **no predicen futuros terremotos**.
+
 
 ---
 
@@ -24,6 +29,11 @@ proyecto_sismos_peru/
 ├── transformacion/
 │   ├── esquemas.py             # Esquemas de validación con Pandera
 │   └── procesamiento.py        # Feature engineering (región, estación, década, etc.)
+├── datos_no_estructurados/      # Limpieza y extracción desde descripciones USGS
+├── machine_learning/            # Clustering y detección de eventos atípicos
+├── indicadores/                 # Indicadores SMART calculados, no declarativos
+├── rendimiento/                 # Benchmark reproducible hasta 100 mil filas
+├── tests/                       # Pruebas unitarias de las capas nuevas
 ├── visualizacion/
 │   ├── graficos.py             # Los 5 gráficos de preguntas de negocio (Plotly)
 │   ├── mapa.py                 # Mapa dinámico de epicentros
@@ -45,7 +55,72 @@ proyecto_sismos_peru/
 
 Además, el dashboard incluye: mapa dinámico con filtros (tiempo, magnitud, profundidad),
 tabla de los últimos sismos en Perú, tendencias temporales por región,
-histogramas de magnitud/profundidad, panel de alertas recientes y un visor de logs.
+histogramas de magnitud/profundidad, panel de alertas recientes, visor de logs y
+una pestaña de análisis avanzado.
+
+## 🧠 Ciencia de datos y datos no estructurados
+
+### Pipeline textual
+
+La descripción `place` de USGS es texto libre (por ejemplo, `45 km SW of Ica,
+Peru`). `datos_no_estructurados/procesamiento_texto.py`:
+
+1. conserva el texto fuente para trazabilidad;
+2. normaliza Unicode, espacios y mayúsculas;
+3. extrae distancia y rumbo cuando existe el patrón de referencia USGS;
+4. clasifica el contexto descriptivo y mide si el texto es utilizable.
+
+Son reglas explícitas y comprobables. No se usa el texto para inferir riesgo ni
+para inventar una ubicación cuando la fuente no la aporta.
+
+### Minería de datos / ML
+
+`machine_learning/modelos.py` estandariza magnitud, profundidad, latitud y
+longitud y ejecuta:
+
+- **K-means**: elige entre 2 y 6 clusters mediante el mayor coeficiente
+  silhouette;
+- **Isolation Forest**: identifica el 2% de eventos con combinaciones más
+  atípicas;
+- semilla fija (`42`) y límite de 25 000 filas para el entrenamiento, de modo
+  que el resultado sea reproducible y la interfaz siga respondiendo con más
+  datos.
+
+El dashboard informa tamaño de muestra, silhouette y tasa de anomalías. Estos
+resultados sirven para exploración y priorización de revisión; no constituyen
+una alerta oficial ni un modelo de predicción sísmica.
+
+## 📦 Evidencia de procesamiento de alto volumen
+
+- Normalización de GeoJSON por lotes de 5 000 eventos.
+- Asignación geográfica vectorizada por lotes de 50 000 filas (sin `apply` fila
+  por fila).
+- Parquet con compresión Zstandard y grupos de 10 000 filas.
+- Lectura selectiva por columnas y rango temporal mediante PyArrow.
+- Benchmark repetible con 10 000, 50 000 y 100 000 filas:
+
+```bash
+python -m rendimiento.benchmark_volumen
+```
+
+El benchmark presenta filas procesadas, segundos y filas por segundo. Sus
+resultados dependen del equipo, por lo que no se incluyen cifras estáticas como
+si fueran universales.
+
+## 🎯 Indicadores SMART
+
+La pestaña **Análisis avanzado** calcula en cada ejecución:
+
+| Indicador | Meta | Horizonte |
+|---|---:|---|
+| Filas completas en campos críticos | ≥ 95% | Cada actualización |
+| IDs USGS duplicados | 0 | Cada actualización |
+| Horas desde la última consulta exitosa a USGS | ≤ 48 horas | Revisión diaria |
+| Descripciones textuales utilizables | ≥ 90% | Cada actualización |
+| Separación de clusters (silhouette) | ≥ 0.20 | Cada ejecución del modelo |
+
+El estado se deriva del dataset visible; si una meta no se cumple, la tabla lo
+muestra en vez de ocultarlo.
 
 ---
 
@@ -116,6 +191,14 @@ python main.py
 streamlit run app.py
 ```
 
+Para instalar dependencias de prueba y verificar la evidencia técnica:
+
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q
+python -m rendimiento.benchmark_volumen --volumenes 10000 50000 100000
+```
+
 La app se abre automáticamente en `http://localhost:8501`. El entorno virtual
 (`.venv/`) y cualquier archivo `.env` **no se suben a GitHub** (ver `.gitignore`).
 
@@ -123,7 +206,7 @@ La app se abre automáticamente en `http://localhost:8501`. El entorno virtual
 
 ## 🔗 Enlaces del proyecto
 
-- **Repositorio en GitHub:** [https://github.com/vares-git/sismos-peru-app]
-- **App en Streamlit Cloud:** [https://sismos-peru-app-rvzuufwndrfps97suyyn7k.streamlit.app/]
+- **Repositorio en GitHub:** [moraangelica762-hash/Sismos-Peru](https://github.com/moraangelica762-hash/Sismos-Peru)
+- **App en Streamlit Cloud:** [sismos-peru-app](https://sismos-peru-app-rvzuufwndrfps97suyyn7k.streamlit.app/)
 
 ---

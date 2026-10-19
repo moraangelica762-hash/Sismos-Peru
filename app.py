@@ -16,10 +16,17 @@ import pandas as pd
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 
-from ingesta.cliente_usgs import asegurar_datos_actualizados, RUTA_PARQUET
+from datos_no_estructurados.procesamiento_texto import enriquecer_textos_sismos
+from indicadores.smart import calcular_indicadores_smart
+from ingesta.cliente_usgs import (
+    asegurar_datos_actualizados,
+    leer_sismos_parquet,
+    obtener_metadata_ingesta,
+)
+from machine_learning.modelos import analizar_patrones_sismicos
 from transformacion.esquemas import validar_sismos_crudos, validar_sismos_enriquecidos
 from transformacion.procesamiento import transformar_sismos
-from visualizacion import componentes, estilos, graficos, mapa
+from visualizacion import analisis_avanzado, componentes, estilos, graficos, mapa
 
 log = logging.getLogger("dashboard")
 
@@ -44,7 +51,7 @@ def cargar_datos_crudos() -> pd.DataFrame:
     existe pero está desactualizado, se dispara una actualización incremental automática antes de leerlo.
     """
     asegurar_datos_actualizados(horas_maximas_antiguedad=24)
-    df = pd.read_parquet(RUTA_PARQUET)
+    df = leer_sismos_parquet()
     df = validar_sismos_crudos(df)
     return df
 
@@ -52,8 +59,15 @@ def cargar_datos_crudos() -> pd.DataFrame:
 @st.cache_data(ttl=3600, show_spinner="Preparando datos para el dashboard...")
 def preparar_datos(df: pd.DataFrame) -> pd.DataFrame:
     df = transformar_sismos(df)
+    df = enriquecer_textos_sismos(df)
     df = validar_sismos_enriquecidos(df)
     return df
+
+
+@st.cache_data(ttl=3600, show_spinner="Ejecutando análisis no supervisado...")
+def preparar_modelos(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
+    """Ejecuta modelos deterministas y cachea el resultado por conjunto filtrado."""
+    return analizar_patrones_sismicos(df)
 
 
 # ── Secciones del dashboard ─────────────────────────────────────────────────
@@ -105,6 +119,42 @@ def seccion_preguntas_de_negocio(df: pd.DataFrame) -> None:
         st.divider()
 
 
+def seccion_analisis_avanzado(df: pd.DataFrame) -> None:
+    st.subheader("Análisis avanzado con ciencia de datos")
+    st.info(
+        "Este análisis describe patrones del histórico. No predice cuándo, dónde "
+        "ni con qué magnitud ocurrirá un futuro terremoto."
+    )
+    if len(df) < 4:
+        st.warning("Se necesitan al menos cuatro eventos con los filtros actuales.")
+        return
+
+    resultado, metricas = preparar_modelos(df)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Clusters seleccionados", metricas["numero_clusters"])
+    col2.metric("Coeficiente silhouette", f"{metricas['silhouette']:.3f}")
+    col3.metric("Eventos atípicos", f"{metricas['anomalias']} ({metricas['tasa_anomalias']:.1%})")
+    st.caption(
+        "K-means selecciona k por silhouette; Isolation Forest marca el 2% más atípico. "
+        "Variables: magnitud, profundidad, latitud y longitud. Semilla fija: 42."
+    )
+    st.plotly_chart(
+        analisis_avanzado.grafico_clusters(resultado),
+        use_container_width=True,
+        key="grafico_clusters_anomalias",
+    )
+    st.plotly_chart(
+        analisis_avanzado.grafico_contexto_textual(resultado),
+        use_container_width=True,
+        key="grafico_contexto_textual",
+    )
+
+    st.markdown("#### Indicadores SMART verificables")
+    indicadores = calcular_indicadores_smart(resultado, metricas, obtener_metadata_ingesta())
+    st.dataframe(indicadores, use_container_width=True, hide_index=True)
+    st.caption("Cada resultado se recalcula desde los datos visibles; no son porcentajes declarativos.")
+
+
 # ── Aplicación principal ─────────────────────────────────────────────────────
 def main() -> None:
     configurar_pagina()
@@ -140,11 +190,12 @@ def main() -> None:
     seccion_resumen(datos_filtrados)
     st.divider()
 
-    tab_mapa, tab_tendencias, tab_distribuciones, tab_preguntas, tab_alertas = st.tabs([
+    tab_mapa, tab_tendencias, tab_distribuciones, tab_preguntas, tab_avanzado, tab_alertas = st.tabs([
         "🗺️ Mapa dinámico",
         "📈 Tendencias temporales",
         "📊 Distribuciones",
         "❓ Preguntas de negocio",
+        "🧠 Análisis avanzado",
         "🚨 Alertas recientes",
     ])
 
@@ -156,6 +207,8 @@ def main() -> None:
         seccion_distribuciones(datos_filtrados)
     with tab_preguntas:
         seccion_preguntas_de_negocio(datos_filtrados)
+    with tab_avanzado:
+        seccion_analisis_avanzado(datos_filtrados)
     with tab_alertas:
         componentes.panel_alertas_recientes()
 
